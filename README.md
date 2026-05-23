@@ -90,3 +90,5 @@ The frontend will be available at `http://localhost:3000`.
 
 Contributing (CSE 325 Group Project)
 Currently, this repository is managed by a solo developer for CSE 325. If additional group members are assigned, please clone the repository, create a descriptive feature branch (e.g., `feature/task-models`), and submit a Pull Request for review. Ensure your feature branch is merged into the `main` branch upon completion.
+
+## Trello Board: [text](https://trello.com/b/jXQfr5M6/club-dasboard-cse325)
