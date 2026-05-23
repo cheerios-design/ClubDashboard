@@ -1,11 +1,11 @@
-# Student Club Management Dashboard 🎬
+# Student Club Management Dashboard
 
 ## Overview
-The Student Club Management Dashboard is a centralized digital workspace designed to streamline operations, task delegation, and role management for university student communities—specifically modeled for organizations like the BAİBÜ Sinema ve Dijital Medya Topluluğu.
+The Student Club Management Dashboard is a centralized digital workspace designed to streamline operations, task delegation, and role management for university student communities—specifically modeled for organizations.
 
 This platform replaces fragmented messaging apps with a unified system where upper board members, strategy consultants, and designers can track their responsibilities in real-time. It features role-based access control, task status tracking, and an internal directory.
 
-## 🏗 Architecture & Tech Stack
+## Architecture & Tech Stack
 This project follows an N-Tier architecture, decoupling the frontend user interface from the backend API for scalability and cleaner separation of concerns.
 
 **Backend (API Layer)**
@@ -20,12 +20,12 @@ This project follows an N-Tier architecture, decoupling the frontend user interf
 - **Deployment:** Vercel
 - **Design System:** Minimalist UI standard emphasizing stark utility. Primary brand background base is set to `#103044`.
 
-## ✨ Core Features
+## Core Features
 - **Role-Based Authorization:** Distinct access levels for Admins (Upper Board) and standard Members.
 - **Kanban-Style Task Management:** Create, assign, and transition tasks through "To-Do," "In Progress," and "Done" states.
 - **Community Roster:** A centralized directory of all active club members and their current roles.
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
