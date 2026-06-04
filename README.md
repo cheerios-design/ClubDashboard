@@ -5,7 +5,7 @@ The Student Club Management Dashboard is a centralized digital workspace designe
 
 This platform replaces fragmented messaging apps with a unified system where upper board members, strategy consultants, and designers can track their responsibilities in real-time. It features role-based access control, task status tracking, and an internal directory.
 
-## 🏗 Architecture & Tech Stack
+## Architecture & Tech Stack
 This project follows an N-Tier architecture, decoupling the frontend user interface from the backend API for scalability and cleaner separation of concerns.
 
 **Backend (API Layer)**
@@ -25,7 +25,7 @@ This project follows an N-Tier architecture, decoupling the frontend user interf
 - **Kanban-Style Task Management:** Create, assign, and transition tasks through "To-Do," "In Progress," and "Done" states.
 - **Community Roster:** A centralized directory of all active club members and their current roles.
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download)
@@ -91,4 +91,4 @@ The frontend will be available at `http://localhost:3000`.
 Contributing (CSE 325 Group Project)
 Currently, this repository is managed by a solo developer for CSE 325. If additional group members are assigned, please clone the repository, create a descriptive feature branch (e.g., `feature/task-models`), and submit a Pull Request for review. Ensure your feature branch is merged into the `main` branch upon completion.
 
-## Trello Board: [text](https://trello.com/b/jXQfr5M6/club-dasboard-cse325)
+## Trello Board: [Club Dashboard - CSE325](https://trello.com/b/jXQfr5M6/club-dasboard-cse325)
