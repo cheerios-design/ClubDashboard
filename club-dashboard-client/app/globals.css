@@ -89,6 +89,35 @@ select {
   background: var(--surface-alt);
 }
 
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-accent {
+  color: var(--accent);
+}
+
+.text-primary {
+  color: var(--text);
+}
+
+.border-line {
+  border-color: var(--border);
+}
+
+.board-shell {
+  max-width: 1650px;
+}
+
+.board-column {
+  min-width: 18rem;
+  min-height: 28rem;
+}
+
+.board-card {
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.16);
+}
+
 .section-label {
   font-size: 0.75rem;
   line-height: 1;

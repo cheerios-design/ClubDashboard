@@ -5,6 +5,23 @@ The Student Club Management Dashboard is a centralized digital workspace designe
 
 This platform replaces fragmented messaging apps with a unified system where upper board members, strategy consultants, and designers can track their responsibilities in real-time. It features role-based access control, task status tracking, and an internal directory.
 
+## W06 Project Checkpoint
+This repository is currently aligned to the W06 checkpoint submission and the live Trello board structure.
+
+### Summary
+- The Next.js frontend is connected to the .NET Web API and now renders the Kanban/task board surface.
+- The global brutalist styling and roster UI are complete.
+- JWT authentication and CORS were the main integration challenge while wiring the decoupled client and API.
+- Drag-and-drop task movement, final testing, and the demo video remain the active delivery items.
+
+### Participants
+- Sam Daramroei, Solo / Acting Team Lead
+
+### Project Task
+- Task reference: Build the Next.js Kanban task board UI components.
+- Task description: Create the To Do, In Progress, and Done task views, map API data into cards, and keep the board aligned with the current project tracker.
+- Scope fit: This feature is the central workflow for the Student Club Management Dashboard because it gives the club a single visual workspace for moving work from planning to completion.
+
 ## Architecture & Tech Stack
 This project follows an N-Tier architecture, decoupling the frontend user interface from the backend API for scalability and cleaner separation of concerns.
 

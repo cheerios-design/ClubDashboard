@@ -1,81 +1,359 @@
-import Image from "next/image";
+type BoardTask = {
+  id: number;
+  title: string;
+  description?: string | null;
+  status?: number | string;
+  assignedUser?: {
+    fullName?: string | null;
+    name?: string | null;
+  } | null;
+};
 
-export default function Home() {
+type BoardColumn = {
+  title: string;
+  accent: string;
+  cards: BoardTask[];
+  footer?: string;
+};
+
+const fallbackTasks: BoardTask[] = [
+  {
+    id: 101,
+    title: "Implement drag-and-drop task reordering",
+    description: "Finish the interactive Kanban behavior for moving tasks between columns.",
+    status: 1,
+  },
+  {
+    id: 102,
+    title: "Record final video walkthrough",
+    description: "Capture the project demo and submission narrative for the W06 checkpoint.",
+    status: 0,
+  },
+  {
+    id: 103,
+    title: "Perform final bug testing and UI polish",
+    description: "Verify the client, API integration, and board presentation before submission.",
+    status: 0,
+  },
+  {
+    id: 104,
+    title: "JWT authentication and CORS hardening",
+    description: "Keep the Next.js client and ASP.NET API aligned for secure token handling.",
+    status: 2,
+  },
+];
+
+const projectResources: BoardTask[] = [
+  {
+    id: 201,
+    title: "GitHub repository",
+    description: "Source of truth for the client, API, and submission notes.",
+  },
+  {
+    id: 202,
+    title: "Trello board",
+    description: "Tracks the live backlog, in-progress work, and delivery milestones.",
+  },
+  {
+    id: 203,
+    title: "API contract",
+    description: "Tasks endpoint, role model, and task status flow used by the dashboard.",
+  },
+];
+
+const featureStories: BoardTask[] = [
+  {
+    id: 301,
+    title: "Admins can create and assign tasks",
+    description: "Upper board members can manage the club workflow from one dashboard.",
+  },
+  {
+    id: 302,
+    title: "Members can view work by status",
+    description: "Task cards are grouped into To Do, In Progress, and Done columns.",
+  },
+  {
+    id: 303,
+    title: "Roster data stays visible",
+    description: "Roles and assigned users remain part of the day-to-day workflow.",
+  },
+];
+
+function normalizeStatus(status: BoardTask["status"]): "ToDo" | "InProgress" | "Done" {
+  if (status === 1 || status === "InProgress") {
+    return "InProgress";
+  }
+
+  if (status === 2 || status === "Done") {
+    return "Done";
+  }
+
+  return "ToDo";
+}
+
+function statusLabel(status: BoardTask["status"]): string {
+  switch (normalizeStatus(status)) {
+    case "InProgress":
+      return "In Progress";
+    case "Done":
+      return "Done";
+    default:
+      return "To Do";
+  }
+}
+
+function cardOwner(task: BoardTask): string | null {
+  return task.assignedUser?.fullName ?? task.assignedUser?.name ?? null;
+}
+
+function splitTasks(tasks: BoardTask[]) {
+  return tasks.reduce(
+    (groups, task) => {
+      groups[normalizeStatus(task.status)].push(task);
+      return groups;
+    },
+    {
+      ToDo: [] as BoardTask[],
+      InProgress: [] as BoardTask[],
+      Done: [] as BoardTask[],
+    },
+  );
+}
+
+async function loadTasks(): Promise<BoardTask[]> {
+  const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
+
+  if (!apiBase) {
+    return fallbackTasks;
+  }
+
+  try {
+    const response = await fetch(`${apiBase}/tasks`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return fallbackTasks;
+    }
+
+    const tasks = (await response.json()) as BoardTask[];
+    return tasks.length > 0 ? tasks : fallbackTasks;
+  } catch {
+    return fallbackTasks;
+  }
+}
+
+function ColumnCard({ task }: { task: BoardTask }) {
+  return (
+    <article className="board-card bordered bg-[rgba(255,255,255,0.04)] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="section-label">Task {task.id}</div>
+        <span className="border border-(--border) px-2 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-(--accent)">
+          {statusLabel(task.status)}
+        </span>
+      </div>
+      <h3 className="mt-3 text-sm font-black uppercase tracking-tight text-(--text)">
+        {task.title}
+      </h3>
+      {task.description ? (
+        <p className="mt-2 text-sm leading-6 text-(--text-muted)">
+          {task.description}
+        </p>
+      ) : null}
+      {cardOwner(task) ? (
+        <p className="mt-3 text-xs uppercase tracking-[0.18em] text-(--text-muted)">
+          Assigned to {cardOwner(task)}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+function StaticCard({ task }: { task: BoardTask }) {
+  return (
+    <article className="board-card bordered bg-[rgba(255,255,255,0.04)] p-3">
+      <div className="section-label">Reference</div>
+      <h3 className="mt-3 text-sm font-black uppercase tracking-tight text-(--text)">
+        {task.title}
+      </h3>
+      {task.description ? (
+        <p className="mt-2 text-sm leading-6 text-(--text-muted)">
+          {task.description}
+        </p>
+      ) : null}
+    </article>
+  );
+}
+
+export default async function Home() {
+  const tasks = await loadTasks();
+  const groupedTasks = splitTasks(tasks);
+
+  const columns: BoardColumn[] = [
+    {
+      title: "Backlog",
+      accent: "text-[var(--text-muted)]",
+      cards: [
+        {
+          id: 401,
+          title: "Finalize submission video and notes",
+          description: "Capture the walkthrough before the final handoff.",
+        },
+        {
+          id: 402,
+          title: "Confirm last-pass testing checklist",
+          description: "Verify auth, task fetching, and UI responsiveness.",
+        },
+      ],
+      footer: "Queued for the last delivery pass.",
+    },
+    {
+      title: "To Do",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.ToDo.length > 0 ? groupedTasks.ToDo : fallbackTasks.filter((task) => normalizeStatus(task.status) === "ToDo"),
+      footer: "The next items waiting for implementation.",
+    },
+    {
+      title: "In Progress",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.InProgress.length > 0 ? groupedTasks.InProgress : fallbackTasks.filter((task) => normalizeStatus(task.status) === "InProgress"),
+      footer: "Interactive work is happening here now.",
+    },
+    {
+      title: "Review",
+      accent: "text-[var(--text-muted)]",
+      cards: [
+        {
+          id: 403,
+          title: "JWT authentication flow",
+          description: "Validate the client token path and backend authorization behavior.",
+        },
+        {
+          id: 404,
+          title: "CORS configuration",
+          description: "Keep cross-origin requests clean between the decoupled apps.",
+        },
+      ],
+      footer: "Needs a final pass before submission.",
+    },
+    {
+      title: "Done",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.Done.length > 0 ? groupedTasks.Done : fallbackTasks.filter((task) => normalizeStatus(task.status) === "Done"),
+      footer: "Completed milestones already verified.",
+    },
+    {
+      title: "Project Resources",
+      accent: "text-[var(--text-muted)]",
+      cards: projectResources,
+      footer: "Use these links to verify scope and delivery.",
+    },
+    {
+      title: "Features",
+      accent: "text-[var(--accent)]",
+      cards: featureStories,
+      footer: "The core user stories that define the product.",
+    },
+  ];
+
+  const totalTasks = tasks.length;
+  const completedTasks = groupedTasks.Done.length;
+  const activeTasks = groupedTasks.ToDo.length + groupedTasks.InProgress.length;
+
   return (
     <main className="app-shell px-4 py-6 sm:px-6 lg:px-8">
-      <section className="grid-frame mx-auto w-full max-w-7xl">
-        <header className="panel col-span-full p-6 sm:p-8 lg:p-10">
-          <div className="tight-stack max-w-4xl">
-            <span className="kicker">University Club</span>
-            <h1 className="hero-title max-w-5xl">
-              Club dashboard for roles, tasks, and operations.
-            </h1>
-            <p className="max-w-2xl text-sm font-medium leading-7 text-[var(--text-muted)] sm:text-base">
-              A disciplined management interface for strategy, production, and
-              day-to-day execution across the society.
-            </p>
+      <section className="mx-auto flex w-full flex-col gap-6" style={{ maxWidth: "1650px" }}>
+        <header className="panel p-6 sm:p-8 lg:p-10">
+          <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr] xl:items-end">
+            <div className="tight-stack max-w-4xl">
+              <span className="kicker">W06 checkpoint</span>
+              <h1 className="hero-title max-w-5xl">
+                Student Club Management Dashboard.
+              </h1>
+              <p className="max-w-3xl text-sm font-medium leading-7 text-(--text-muted) sm:text-base">
+                A club operations workspace for role management, task tracking, and final submission delivery.
+                The homepage now mirrors the current Trello board structure while pulling task data from the
+                .NET API when available.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+              <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
+                <div className="section-label">Tasks synced</div>
+                <p className="mt-3 text-3xl font-black tracking-tight">{totalTasks}</p>
+                <p className="mt-2 text-sm text-(--text-muted)">Fetched or seeded board items.</p>
+              </article>
+              <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
+                <div className="section-label">Completed</div>
+                <p className="mt-3 text-3xl font-black tracking-tight">{completedTasks}</p>
+                <p className="mt-2 text-sm text-(--text-muted)">Milestones already approved.</p>
+              </article>
+              <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
+                <div className="section-label">Active work</div>
+                <p className="mt-3 text-3xl font-black tracking-tight">{activeTasks}</p>
+                <p className="mt-2 text-sm text-(--text-muted)">Items still moving toward submission.</p>
+              </article>
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-3">
+            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
+              <div className="section-label">Successes</div>
+              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
+                The Next.js client is now aligned with the .NET Web API, the global brutalist styling is complete,
+                and the roster and Kanban surfaces are in place.
+              </p>
+            </article>
+            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
+              <div className="section-label">Challenge</div>
+              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
+                JWT authentication and CORS needed careful coordination so the decoupled client and API could
+                exchange requests without browser errors.
+              </p>
+            </article>
+            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
+              <div className="section-label">Next tasks</div>
+              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
+                Drag-and-drop behavior, final bug testing, and the demo video are the remaining submission items.
+              </p>
+            </article>
           </div>
         </header>
 
-        <section className="panel-alt col-span-full grid gap-4 p-6 sm:grid-cols-3 sm:p-8">
-          <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-            <div className="section-label">Roles</div>
-            <p className="mt-3 text-2xl font-black tracking-tight">3</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              Strategy, design, and member operations.
-            </p>
-          </article>
+        <section className="grid gap-4 overflow-x-auto pb-2 xl:grid-cols-7">
+          {columns.map((column) => (
+            <section
+              key={column.title}
+              className="panel-alt flex flex-col p-4"
+              style={{ minWidth: "18rem", minHeight: "28rem" }}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="section-label">{column.title}</div>
+                  <h2 className={`mt-2 text-lg font-black uppercase tracking-tight ${column.accent}`}>
+                    {column.cards.length}
+                  </h2>
+                </div>
+                <span className="border border-(--border) px-2 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-(--text-muted)">
+                  {column.cards.length}
+                </span>
+              </div>
 
-          <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-            <div className="section-label">Active Tasks</div>
-            <p className="mt-3 text-2xl font-black tracking-tight">12</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              Work items tracked across the current sprint.
-            </p>
-          </article>
+              <div className="mt-4 grid gap-3">
+                {column.cards.map((task) =>
+                  column.title === "Project Resources" || column.title === "Features" ? (
+                    <StaticCard key={task.id} task={task} />
+                  ) : (
+                    <ColumnCard key={task.id} task={task} />
+                  ),
+                )}
+              </div>
 
-          <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-            <div className="section-label">Workflow</div>
-            <p className="mt-3 text-2xl font-black tracking-tight">API + UI</p>
-            <p className="mt-2 text-sm text-[var(--text-muted)]">
-              ASP.NET Core backend with a Next.js client.
-            </p>
-          </article>
-        </section>
-
-        <section className="col-span-full grid gap-4 lg:grid-cols-12">
-          <article className="panel lg:col-span-7 p-6 sm:p-8">
-            <div className="section-label">Operations</div>
-            <h2 className="mt-3 text-2xl font-black uppercase tracking-tight">
-              Current system focus
-            </h2>
-            <div className="rule my-5" />
-            <div className="tight-stack text-sm leading-7 text-[var(--text-muted)]">
-              <p>Track club roles, assign work, and keep execution visible.</p>
-              <p>
-                The interface is intentionally restrained: heavy borders, strict
-                spacing, bold type, and high contrast.
-              </p>
-            </div>
-          </article>
-
-          <aside className="panel-alt lg:col-span-5 p-6 sm:p-8">
-            <div className="section-label">Build Status</div>
-            <ul className="mt-4 space-y-3 text-sm font-medium">
-              <li className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-                <span>API scaffold</span>
-                <span className="text-[var(--accent)]">Ready</span>
-              </li>
-              <li className="flex items-center justify-between border-b border-[var(--border)] pb-3">
-                <span>EF Core wiring</span>
-                <span className="text-[var(--accent)]">Ready</span>
-              </li>
-              <li className="flex items-center justify-between">
-                <span>Frontend theme</span>
-                <span className="text-[var(--accent)]">Ready</span>
-              </li>
-            </ul>
-          </aside>
+              <div className="mt-auto pt-4 text-xs uppercase tracking-[0.18em] text-(--text-muted)">
+                {column.footer}
+              </div>
+            </section>
+          ))}
         </section>
       </section>
     </main>
