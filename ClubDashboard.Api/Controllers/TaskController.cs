@@ -38,10 +38,16 @@ public class TasksController : ControllerBase
             return Ok(tasks);
         }
         catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to retrieve tasks.");
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "An unexpected error occurred while retrieving tasks." });
-        }
+    {
+        _logger.LogError(ex, "Failed to retrieve tasks.");
+        
+        // TEMPORARY FIX: Exposing the raw error to the browser for debugging
+        return StatusCode(StatusCodes.Status500InternalServerError, new 
+        { 
+            message = ex.Message, 
+            innerDetails = ex.InnerException?.Message 
+        });
+    }
     }
 
     /// <summary>
