@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/59629cad-a69c-4b14-9a76-7052a8a2b147/resourceGroups/CSE325/providers/Microsoft.Web/sites/club-dashboard-api",
+    "appService.deploySubpath": "ClubDashboard.Api"
+}
