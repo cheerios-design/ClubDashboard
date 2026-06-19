@@ -16,6 +16,17 @@ type BoardColumn = {
   footer?: string;
 };
 
+type ApiFeedback = {
+  tone: "success" | "warning" | "info";
+  title: string;
+  message: string;
+};
+
+type TaskLoadResult = {
+  tasks: BoardTask[];
+  feedback: ApiFeedback;
+};
+
 const fallbackTasks: BoardTask[] = [
   {
     id: 101,
@@ -120,11 +131,33 @@ function splitTasks(tasks: BoardTask[]) {
   );
 }
 
-async function loadTasks(): Promise<BoardTask[]> {
+async function readErrorMessage(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json().catch(() => null)) as { message?: unknown } | null;
+
+    if (payload && typeof payload.message === "string" && payload.message.trim().length > 0) {
+      return payload.message;
+    }
+  }
+
+  const text = await response.text().catch(() => "");
+  return text.trim().length > 0 ? text.trim() : null;
+}
+
+async function loadTasks(): Promise<TaskLoadResult> {
   const apiBase = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
 
   if (!apiBase) {
-    return fallbackTasks;
+    return {
+      tasks: fallbackTasks,
+      feedback: {
+        tone: "info",
+        title: "Using seeded board data",
+        message: "NEXT_PUBLIC_API_URL is not configured, so the dashboard is showing local sample tasks.",
+      },
+    };
   }
 
   try {
@@ -133,14 +166,72 @@ async function loadTasks(): Promise<BoardTask[]> {
     });
 
     if (!response.ok) {
-      return fallbackTasks;
+      const apiMessage = await readErrorMessage(response);
+
+      return {
+        tasks: fallbackTasks,
+        feedback: {
+          tone: "warning",
+          title: "Task sync unavailable",
+          message:
+            apiMessage ??
+            `The API returned ${response.status} ${response.statusText}. The dashboard is showing local sample tasks instead.`,
+        },
+      };
     }
 
     const tasks = (await response.json()) as BoardTask[];
-    return tasks.length > 0 ? tasks : fallbackTasks;
+    if (tasks.length === 0) {
+      return {
+        tasks: fallbackTasks,
+        feedback: {
+          tone: "info",
+          title: "API request succeeded",
+          message: "The server returned an empty task list, so the dashboard is showing sample tasks.",
+        },
+      };
+    }
+
+    return {
+      tasks,
+      feedback: {
+        tone: "success",
+        title: "API request succeeded",
+        message: `Loaded ${tasks.length} tasks from the .NET API.`,
+      },
+    };
   } catch {
-    return fallbackTasks;
+    return {
+      tasks: fallbackTasks,
+      feedback: {
+        tone: "warning",
+        title: "Task sync failed",
+        message: "The client could not reach the API, so it is showing local sample tasks.",
+      },
+    };
   }
+}
+
+function ApiStatusBanner({ feedback }: { feedback: ApiFeedback }) {
+  const toneStyles = {
+    success: "border-[#7ad38b] bg-[rgba(122,211,139,0.12)] text-[#e8f8ea]",
+    warning: "border-[#e7c65c] bg-[rgba(231,198,92,0.12)] text-[var(--text)]",
+    info: "border-[var(--border)] bg-[rgba(255,255,255,0.04)] text-[var(--text)]",
+  } as const;
+
+  const labelStyles = {
+    success: "text-[#8ee39a]",
+    warning: "text-[var(--accent)]",
+    info: "text-[var(--text-muted)]",
+  } as const;
+
+  return (
+    <aside className={`bordered p-5 ${toneStyles[feedback.tone]}`} aria-live={feedback.tone === "success" ? "polite" : "assertive"} role={feedback.tone === "success" ? "status" : "alert"}>
+      <div className={`section-label ${labelStyles[feedback.tone]}`}>API feedback</div>
+      <h2 className="mt-3 text-base font-black uppercase tracking-tight">{feedback.title}</h2>
+      <p className="mt-2 text-sm leading-7 text-current/90">{feedback.message}</p>
+    </aside>
+  );
 }
 
 function ColumnCard({ task }: { task: BoardTask }) {
@@ -186,7 +277,7 @@ function StaticCard({ task }: { task: BoardTask }) {
 }
 
 export default async function Home() {
-  const tasks = await loadTasks();
+  const { tasks, feedback } = await loadTasks();
   const groupedTasks = splitTasks(tasks);
 
   const columns: BoardColumn[] = [
@@ -294,6 +385,10 @@ export default async function Home() {
                 <p className="mt-2 text-sm text-(--text-muted)">Items still moving toward submission.</p>
               </article>
             </div>
+          </div>
+
+          <div className="mt-6">
+            <ApiStatusBanner feedback={feedback} />
           </div>
 
           <div className="mt-6 grid gap-4 lg:grid-cols-3">
