@@ -1,16 +1,18 @@
-'use client';
+"use client";
 
-import { useRef } from "react";
+import { FormEvent, useMemo, useRef, useState } from "react";
 
 export type BoardTask = {
   id: number;
   title: string;
   description?: string | null;
   status?: number | string;
+  assignedUserId?: number | null;
   assignedUser?: {
     fullName?: string | null;
     name?: string | null;
   } | null;
+  createdAt?: string;
 };
 
 export type ApiFeedback = {
@@ -19,77 +21,20 @@ export type ApiFeedback = {
   message: string;
 };
 
+type TaskStatusKey = "ToDo" | "InProgress" | "Done";
+
 type BoardColumn = {
   title: string;
   accent: string;
   cards: BoardTask[];
-  footer?: string;
+  footer: string;
+  emptyMessage: string;
+  showComposer?: boolean;
 };
 
-const fallbackTasks: BoardTask[] = [
-  {
-    id: 101,
-    title: "Implement drag-and-drop task reordering",
-    description: "Finish the interactive Kanban behavior for moving tasks between columns.",
-    status: 1,
-  },
-  {
-    id: 102,
-    title: "Record final video walkthrough",
-    description: "Capture the project demo and submission narrative for the W06 checkpoint.",
-    status: 0,
-  },
-  {
-    id: 103,
-    title: "Perform final bug testing and UI polish",
-    description: "Verify the client, API integration, and board presentation before submission.",
-    status: 0,
-  },
-  {
-    id: 104,
-    title: "JWT authentication and CORS hardening",
-    description: "Keep the Next.js client and ASP.NET API aligned for secure token handling.",
-    status: 2,
-  },
-];
+const columnOrder: TaskStatusKey[] = ["ToDo", "InProgress", "Done"];
 
-const projectResources: BoardTask[] = [
-  {
-    id: 201,
-    title: "GitHub repository",
-    description: "Source of truth for the client, API, and submission notes.",
-  },
-  {
-    id: 202,
-    title: "Trello board",
-    description: "Tracks the live backlog, in-progress work, and delivery milestones.",
-  },
-  {
-    id: 203,
-    title: "API contract",
-    description: "Tasks endpoint, role model, and task status flow used by the dashboard.",
-  },
-];
-
-const featureStories: BoardTask[] = [
-  {
-    id: 301,
-    title: "Admins can create and assign tasks",
-    description: "Upper board members can manage the club workflow from one dashboard.",
-  },
-  {
-    id: 302,
-    title: "Members can view work by status",
-    description: "Task cards are grouped into To Do, In Progress, and Done columns.",
-  },
-  {
-    id: 303,
-    title: "Roster data stays visible",
-    description: "Roles and assigned users remain part of the day-to-day workflow.",
-  },
-];
-
-function normalizeStatus(status: BoardTask["status"]): "ToDo" | "InProgress" | "Done" {
+function normalizeStatus(status: BoardTask["status"]): TaskStatusKey {
   if (status === 1 || status === "InProgress") {
     return "InProgress";
   }
@@ -99,6 +44,17 @@ function normalizeStatus(status: BoardTask["status"]): "ToDo" | "InProgress" | "
   }
 
   return "ToDo";
+}
+
+function statusValue(status: TaskStatusKey): number {
+  switch (status) {
+    case "InProgress":
+      return 1;
+    case "Done":
+      return 2;
+    default:
+      return 0;
+  }
 }
 
 function statusLabel(status: BoardTask["status"]): string {
@@ -130,75 +86,96 @@ function splitTasks(tasks: BoardTask[]) {
   );
 }
 
-function buildColumns(tasks: BoardTask[]): BoardColumn[] {
-  const groupedTasks = splitTasks(tasks);
+function getApiBase(): string {
+  return process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "";
+}
 
-  return [
-    {
-      title: "Backlog",
-      accent: "text-[var(--text-muted)]",
-      cards: [
-        {
-          id: 401,
-          title: "Finalize submission video and notes",
-          description: "Capture the walkthrough before the final handoff.",
-        },
-        {
-          id: 402,
-          title: "Confirm last-pass testing checklist",
-          description: "Verify auth, task fetching, and UI responsiveness.",
-        },
-      ],
-      footer: "Queued for the last delivery pass.",
+async function readErrorMessage(response: Response): Promise<string | null> {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (contentType.includes("application/json")) {
+    const payload = (await response.json().catch(() => null)) as { message?: unknown } | null;
+
+    if (payload && typeof payload.message === "string" && payload.message.trim().length > 0) {
+      return payload.message;
+    }
+  }
+
+  const text = await response.text().catch(() => "");
+  return text.trim().length > 0 ? text.trim() : null;
+}
+
+async function createTaskApi(title: string): Promise<BoardTask> {
+  const apiBase = getApiBase();
+
+  if (!apiBase) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBase}/tasks`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
     },
-    {
-      title: "To Do",
-      accent: "text-[var(--accent)]",
-      cards: groupedTasks.ToDo.length > 0 ? groupedTasks.ToDo : fallbackTasks.filter((task) => normalizeStatus(task.status) === "ToDo"),
-      footer: "The next items waiting for implementation.",
+    cache: "no-store",
+    body: JSON.stringify({
+      title,
+      status: 0,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message ?? "The task could not be created.");
+  }
+
+  return (await response.json()) as BoardTask;
+}
+
+async function updateTaskApi(task: BoardTask, nextStatus: TaskStatusKey): Promise<void> {
+  const apiBase = getApiBase();
+
+  if (!apiBase) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBase}/tasks/${task.id}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
     },
-    {
-      title: "In Progress",
-      accent: "text-[var(--accent)]",
-      cards: groupedTasks.InProgress.length > 0 ? groupedTasks.InProgress : fallbackTasks.filter((task) => normalizeStatus(task.status) === "InProgress"),
-      footer: "Interactive work is happening here now.",
-    },
-    {
-      title: "Review",
-      accent: "text-[var(--text-muted)]",
-      cards: [
-        {
-          id: 403,
-          title: "JWT authentication flow",
-          description: "Validate the client token path and backend authorization behavior.",
-        },
-        {
-          id: 404,
-          title: "CORS configuration",
-          description: "Keep cross-origin requests clean between the decoupled apps.",
-        },
-      ],
-      footer: "Needs a final pass before submission.",
-    },
-    {
-      title: "Done",
-      accent: "text-[var(--accent)]",
-      cards: groupedTasks.Done.length > 0 ? groupedTasks.Done : fallbackTasks.filter((task) => normalizeStatus(task.status) === "Done"),
-      footer: "Completed milestones already verified.",
-    },
-    {
-      title: "Project Resources",
-      accent: "text-[var(--text-muted)]",
-      cards: projectResources,
-      footer: "Use these links to verify scope and delivery.",
-    },
-    {
-      title: "Features",
-      accent: "text-[var(--accent)]",
-      cards: featureStories,
-      footer: "The core user stories that define the product.",
-    },
-  ];
+    cache: "no-store",
+    body: JSON.stringify({
+      id: task.id,
+      title: task.title,
+      description: task.description ?? null,
+      status: statusValue(nextStatus),
+      assignedUserId: task.assignedUserId ?? null,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message ?? "The task could not be updated.");
+  }
+}
+
+async function deleteTaskApi(id: number): Promise<void> {
+  const apiBase = getApiBase();
+
+  if (!apiBase) {
+    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
+  }
+
+  const response = await fetch(`${apiBase}/tasks/${id}`, {
+    method: "DELETE",
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    const message = await readErrorMessage(response);
+    throw new Error(message ?? "The task could not be deleted.");
+  }
 }
 
 function ApiStatusBanner({ feedback }: { feedback: ApiFeedback }) {
@@ -227,60 +204,158 @@ function ApiStatusBanner({ feedback }: { feedback: ApiFeedback }) {
   );
 }
 
-function Card({
+function TaskCard({
   task,
-  kind,
-  index,
-  onKeyDown,
+  onMoveLeft,
+  onMoveRight,
+  onDelete,
+  isBusy,
   refCallback,
+  onKeyDown,
 }: {
   task: BoardTask;
-  kind: "task" | "reference";
-  index: number;
-  onKeyDown: React.KeyboardEventHandler<HTMLElement>;
+  onMoveLeft?: () => void;
+  onMoveRight?: () => void;
+  onDelete: () => void;
+  isBusy: boolean;
   refCallback: (node: HTMLElement | null) => void;
+  onKeyDown: React.KeyboardEventHandler<HTMLElement>;
 }) {
   const owner = cardOwner(task);
-  const isTaskCard = kind === "task";
 
   return (
     <article
       ref={refCallback}
       tabIndex={0}
       role="listitem"
-      aria-label={
-        isTaskCard
-          ? `${task.title}, ${statusLabel(task.status)} task card${owner ? `, assigned to ${owner}` : ""}`
-          : `Reference card, ${task.title}`
-      }
-      aria-roledescription={isTaskCard ? "Kanban card" : undefined}
-      data-card-index={index}
+      aria-label={`${task.title}, ${statusLabel(task.status)} task card${owner ? `, assigned to ${owner}` : ""}`}
+      aria-roledescription="Kanban card"
       onKeyDown={onKeyDown}
       className="board-card bordered bg-[rgba(255,255,255,0.04)] p-3 focus-visible:ring-2 focus-visible:ring-(--accent) focus-visible:ring-offset-2 focus-visible:ring-offset-(--surface)"
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="section-label">{isTaskCard ? `Task ${task.id}` : "Reference"}</div>
-        {isTaskCard ? (
-          <span className="border border-(--border) px-2 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-(--accent)">
-            {statusLabel(task.status)}
-          </span>
-        ) : null}
+        <div className="section-label">Task {task.id}</div>
+        <span className="border border-(--border) px-2 py-1 text-[0.65rem] uppercase tracking-[0.2em] text-(--accent)">
+          {statusLabel(task.status)}
+        </span>
       </div>
+
       <h3 className="mt-3 text-sm font-black uppercase tracking-tight text-(--text)">{task.title}</h3>
+
       {task.description ? (
         <p className="mt-2 text-sm leading-6 text-(--text-muted)">{task.description}</p>
       ) : null}
+
       {owner ? (
         <p className="mt-3 text-xs uppercase tracking-[0.18em] text-(--text-muted)">Assigned to {owner}</p>
       ) : null}
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {onMoveLeft ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={onMoveLeft}
+              className="bordered px-3 py-2 text-xs font-black uppercase tracking-[0.2em] transition hover:bg-[rgba(255,255,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Move ${task.title} to the previous column`}
+            >
+              ←
+            </button>
+          ) : (
+            <span className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--text-muted)">
+              Fixed
+            </span>
+          )}
+
+          {onMoveRight ? (
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={onMoveRight}
+              className="bordered px-3 py-2 text-xs font-black uppercase tracking-[0.2em] transition hover:bg-[rgba(255,255,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Move ${task.title} to the next column`}
+            >
+              →
+            </button>
+          ) : (
+            <span className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.2em] text-(--text-muted)">
+              Fixed
+            </span>
+          )}
+        </div>
+
+        <button
+          type="button"
+          disabled={isBusy}
+          onClick={onDelete}
+          className="bordered px-3 py-2 text-xs font-black uppercase tracking-[0.2em] text-[#f2a7a7] transition hover:bg-[rgba(255,255,255,0.08)] disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={`Delete ${task.title}`}
+        >
+          Delete
+        </button>
+      </div>
     </article>
   );
 }
 
-export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]; feedback: ApiFeedback }) {
+export default function DashboardBoard({
+  initialTasks,
+  initialFeedback,
+}: {
+  initialTasks: BoardTask[];
+  initialFeedback: ApiFeedback;
+}) {
+  const [tasks, setTasks] = useState(initialTasks);
+  const [feedback, setFeedback] = useState(initialFeedback);
+  const [newTitle, setNewTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [busyTaskIds, setBusyTaskIds] = useState<number[]>([]);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
-  const columns = buildColumns(tasks);
-  let focusableIndex = 0;
+
+  const groupedTasks = useMemo(() => splitTasks(tasks), [tasks]);
+
+  const columns: BoardColumn[] = [
+    {
+      title: "Backlog",
+      accent: "text-[var(--text-muted)]",
+      cards: [],
+      footer: "Seed the board here, then move work across the columns.",
+      emptyMessage: "No backlog items yet.",
+      showComposer: true,
+    },
+    {
+      title: "To Do",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.ToDo,
+      footer: "The next items waiting for implementation.",
+      emptyMessage: "No tasks in To Do.",
+    },
+    {
+      title: "In Progress",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.InProgress,
+      footer: "Interactive work is happening here now.",
+      emptyMessage: "No tasks in progress.",
+    },
+    {
+      title: "Done",
+      accent: "text-[var(--accent)]",
+      cards: groupedTasks.Done,
+      footer: "Completed milestones already verified.",
+      emptyMessage: "No completed tasks yet.",
+    },
+  ];
+
+  const markBusy = (id: number, busy: boolean) => {
+    setBusyTaskIds((current) => {
+      if (busy) {
+        return current.includes(id) ? current : [...current, id];
+      }
+
+      return current.filter((taskId) => taskId !== id);
+    });
+  };
 
   const focusCard = (index: number) => {
     const target = cardRefs.current[index];
@@ -316,7 +391,105 @@ export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]
     focusCard(targetIndex);
   };
 
-  const groupedTasks = splitTasks(tasks);
+  const handleCreateTask = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const title = newTitle.trim();
+    if (!title) {
+      setFeedback({
+        tone: "warning",
+        title: "Title required",
+        message: "Enter a task title before creating a card.",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+
+    try {
+      const createdTask = await createTaskApi(title);
+      setTasks((current) => [...current, createdTask]);
+      setNewTitle("");
+      setFeedback({
+        tone: "success",
+        title: "Task created",
+        message: `"${createdTask.title}" was added to To Do.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "warning",
+        title: "Create failed",
+        message: error instanceof Error ? error.message : "The task could not be created.",
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleMoveTask = async (task: BoardTask, direction: "left" | "right") => {
+    const currentStatus = normalizeStatus(task.status);
+    const currentIndex = columnOrder.indexOf(currentStatus);
+    const nextIndex = direction === "left" ? currentIndex - 1 : currentIndex + 1;
+
+    if (nextIndex < 0 || nextIndex >= columnOrder.length) {
+      return;
+    }
+
+    const nextStatus = columnOrder[nextIndex];
+    markBusy(task.id, true);
+
+    try {
+      await updateTaskApi(task, nextStatus);
+
+      setTasks((current) =>
+        current.map((existingTask) =>
+          existingTask.id === task.id ? { ...existingTask, status: statusValue(nextStatus) } : existingTask,
+        ),
+      );
+
+      setFeedback({
+        tone: "success",
+        title: "Task updated",
+        message: `"${task.title}" moved to ${statusLabel(statusValue(nextStatus))}.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "warning",
+        title: "Update failed",
+        message: error instanceof Error ? error.message : "The task could not be updated.",
+      });
+    } finally {
+      markBusy(task.id, false);
+    }
+  };
+
+  const handleDeleteTask = async (task: BoardTask) => {
+    markBusy(task.id, true);
+
+    try {
+      await deleteTaskApi(task.id);
+
+      setTasks((current) => current.filter((existingTask) => existingTask.id !== task.id));
+      setFeedback({
+        tone: "success",
+        title: "Task deleted",
+        message: `"${task.title}" was removed from the board.`,
+      });
+    } catch (error) {
+      setFeedback({
+        tone: "warning",
+        title: "Delete failed",
+        message: error instanceof Error ? error.message : "The task could not be deleted.",
+      });
+    } finally {
+      markBusy(task.id, false);
+    }
+  };
+
+  const totalTasks = tasks.length;
+  const doneTasks = groupedTasks.Done.length;
+  const activeTasks = groupedTasks.ToDo.length + groupedTasks.InProgress.length;
+  const orderedTasks = columns.flatMap((col) => col.cards);
 
   return (
     <main id="main-content" aria-labelledby="dashboard-title" className="app-shell px-4 py-6 sm:px-6 lg:px-8">
@@ -330,8 +503,7 @@ export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]
               </h1>
               <p className="max-w-3xl text-sm font-medium leading-7 text-(--text-muted) sm:text-base">
                 A club operations workspace for role management, task tracking, and final submission delivery.
-                The homepage now mirrors the current Trello board structure while pulling task data from the
-                .NET API when available.
+                The board now loads live data from the .NET API and stays empty when the API returns no tasks.
               </p>
               <p id="board-instructions" className="max-w-3xl text-sm leading-7 text-(--text-muted)">
                 Keyboard tip: tab into any card, then use arrow keys, Home, or End to move across the board.
@@ -341,20 +513,18 @@ export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]
             <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
               <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
                 <div className="section-label">Tasks synced</div>
-                <p className="mt-3 text-3xl font-black tracking-tight">{tasks.length}</p>
-                <p className="mt-2 text-sm text-(--text-muted)">Fetched or seeded board items.</p>
+                <p className="mt-3 text-3xl font-black tracking-tight">{totalTasks}</p>
+                <p className="mt-2 text-sm text-(--text-muted)">Live items loaded from the API.</p>
               </article>
               <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
                 <div className="section-label">Completed</div>
-                <p className="mt-3 text-3xl font-black tracking-tight">{groupedTasks.Done.length}</p>
+                <p className="mt-3 text-3xl font-black tracking-tight">{doneTasks}</p>
                 <p className="mt-2 text-sm text-(--text-muted)">Milestones already approved.</p>
               </article>
               <article className="bordered bg-[rgba(255,255,255,0.03)] p-4">
                 <div className="section-label">Active work</div>
-                <p className="mt-3 text-3xl font-black tracking-tight">
-                  {groupedTasks.ToDo.length + groupedTasks.InProgress.length}
-                </p>
-                <p className="mt-2 text-sm text-(--text-muted)">Items still moving toward submission.</p>
+                <p className="mt-3 text-3xl font-black tracking-tight">{activeTasks}</p>
+                <p className="mt-2 text-sm text-(--text-muted)">Items still moving toward completion.</p>
               </article>
             </div>
           </div>
@@ -362,32 +532,9 @@ export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]
           <div className="mt-6">
             <ApiStatusBanner feedback={feedback} />
           </div>
-
-          <div className="mt-6 grid gap-4 lg:grid-cols-3">
-            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-              <div className="section-label">Successes</div>
-              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
-                The Next.js client is now aligned with the .NET Web API, the global brutalist styling is complete,
-                and the roster and Kanban surfaces are in place.
-              </p>
-            </article>
-            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-              <div className="section-label">Challenge</div>
-              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
-                JWT authentication and CORS needed careful coordination so the decoupled client and API could
-                exchange requests without browser errors.
-              </p>
-            </article>
-            <article className="bordered bg-[rgba(255,255,255,0.03)] p-5">
-              <div className="section-label">Next tasks</div>
-              <p className="mt-3 text-sm leading-7 text-(--text-muted)">
-                Drag-and-drop behavior, final bug testing, and the demo video are the remaining submission items.
-              </p>
-            </article>
-          </div>
         </header>
 
-        <section className="grid gap-4 overflow-x-auto pb-2 xl:grid-cols-7" aria-label="Club task board">
+        <section className="grid gap-4 overflow-x-auto pb-2 xl:grid-cols-4" aria-label="Club task board">
           {columns.map((column) => (
             <section
               key={column.title}
@@ -409,24 +556,58 @@ export default function DashboardBoard({ tasks, feedback }: { tasks: BoardTask[]
                 </span>
               </div>
 
-              <div className="mt-4 grid gap-3" role="list">
-                {column.cards.map((task) => {
-                  const currentIndex = focusableIndex++;
-                  const kind = column.title === "Project Resources" || column.title === "Features" ? "reference" : "task";
+              {column.showComposer ? (
+                <form onSubmit={handleCreateTask} className="mt-4 bordered bg-[rgba(255,255,255,0.04)] p-3">
+                  <div className="section-label">Create task</div>
+                  <label className="sr-only" htmlFor="new-task-title">
+                    Task title
+                  </label>
+                  <input
+                    id="new-task-title"
+                    value={newTitle}
+                    onChange={(event) => setNewTitle(event.target.value)}
+                    placeholder="ENTER TASK TITLE"
+                    className="mt-3 w-full border border-(--border) bg-(--surface) px-4 py-3 text-sm font-black uppercase tracking-tight text-(--text) outline-none placeholder:text-(--text-muted) focus:border-[var(--accent)]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isCreating}
+                    className="mt-3 w-full border border-(--accent) bg-[var(--accent)] px-4 py-3 text-sm font-black uppercase tracking-[0.18em] text-[var(--surface)] transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isCreating ? "Creating..." : "Add to To Do"}
+                  </button>
+                </form>
+              ) : null}
 
-                  return (
-                    <Card
-                      key={task.id}
-                      task={task}
-                      kind={kind}
-                      index={currentIndex}
-                      onKeyDown={handleCardKeyDown(currentIndex)}
-                      refCallback={(node) => {
-                        cardRefs.current[currentIndex] = node;
-                      }}
-                    />
-                  );
-                })}
+              <div className="mt-4 grid gap-3" role="list">
+                {column.cards.length === 0 ? (
+                  <div className="bordered border-dashed p-4 text-sm uppercase tracking-[0.16em] text-(--text-muted)">
+                    {column.emptyMessage}
+                  </div>
+                ) : (
+                  column.cards.map((task) => {
+                    const currentIndex = orderedTasks.findIndex((t) => t.id === task.id);
+                    const status = normalizeStatus(task.status);
+                    const busy = busyTaskIds.includes(task.id);
+                    const leftTarget = status === "InProgress" ? "To Do" : status === "Done" ? "In Progress" : null;
+                    const rightTarget = status === "ToDo" ? "In Progress" : status === "InProgress" ? "Done" : null;
+
+                    return (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        isBusy={busy}
+                        onMoveLeft={leftTarget ? () => handleMoveTask(task, "left") : undefined}
+                        onMoveRight={rightTarget ? () => handleMoveTask(task, "right") : undefined}
+                        onDelete={() => handleDeleteTask(task)}
+                        onKeyDown={handleCardKeyDown(currentIndex)}
+                        refCallback={(node) => {
+                          cardRefs.current[currentIndex] = node;
+                        }}
+                      />
+                    );
+                  })
+                )}
               </div>
 
               <div className="mt-auto pt-4 text-xs uppercase tracking-[0.18em] text-(--text-muted)">

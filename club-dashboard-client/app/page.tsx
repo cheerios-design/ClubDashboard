@@ -27,9 +27,9 @@ async function loadTasks(): Promise<TaskLoadResult> {
     return {
       tasks: [],
       feedback: {
-        tone: "info",
-        title: "Using seeded board data",
-        message: "NEXT_PUBLIC_API_URL is not configured, so the dashboard is showing local sample tasks.",
+        tone: "warning",
+        title: "API not configured",
+        message: "NEXT_PUBLIC_API_URL is missing, so the board starts empty.",
       },
     };
   }
@@ -49,19 +49,20 @@ async function loadTasks(): Promise<TaskLoadResult> {
           title: "Task sync unavailable",
           message:
             apiMessage ??
-            `The API returned ${response.status} ${response.statusText}. The dashboard is showing local sample tasks instead.`,
+            `The API returned ${response.status} ${response.statusText}. The board starts empty.`,
         },
       };
     }
 
     const tasks = (await response.json()) as BoardTask[];
+
     if (tasks.length === 0) {
       return {
         tasks: [],
         feedback: {
           tone: "info",
-          title: "API request succeeded",
-          message: "The server returned an empty task list, so the dashboard is showing sample tasks.",
+          title: "No tasks yet",
+          message: "The API returned an empty array, so the board is intentionally empty.",
         },
       };
     }
@@ -70,7 +71,7 @@ async function loadTasks(): Promise<TaskLoadResult> {
       tasks,
       feedback: {
         tone: "success",
-        title: "API request succeeded",
+        title: "Tasks synced",
         message: `Loaded ${tasks.length} tasks from the .NET API.`,
       },
     };
@@ -80,7 +81,7 @@ async function loadTasks(): Promise<TaskLoadResult> {
       feedback: {
         tone: "warning",
         title: "Task sync failed",
-        message: "The client could not reach the API, so it is showing local sample tasks.",
+        message: "The dashboard could not reach the API, so it starts empty.",
       },
     };
   }
@@ -89,5 +90,5 @@ async function loadTasks(): Promise<TaskLoadResult> {
 export default async function Home() {
   const { tasks, feedback } = await loadTasks();
 
-  return <DashboardBoard tasks={tasks} feedback={feedback} />;
+  return <DashboardBoard initialTasks={tasks} initialFeedback={feedback} />;
 }
