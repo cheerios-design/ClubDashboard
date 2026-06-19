@@ -212,6 +212,10 @@ async function loadTasks(): Promise<TaskLoadResult> {
   }
 }
 
+/**
+ * Renders the API feedback banner that reports task load success, warnings, or fallback states.
+ * @param feedback The current API feedback message and tone.
+ */
 function ApiStatusBanner({ feedback }: { feedback: ApiFeedback }) {
   const toneStyles = {
     success: "border-[#7ad38b] bg-[rgba(122,211,139,0.12)] text-[#e8f8ea]",
@@ -234,6 +238,10 @@ function ApiStatusBanner({ feedback }: { feedback: ApiFeedback }) {
   );
 }
 
+/**
+ * Renders a task card for a board item returned by the API or fallback data.
+ * @param task The task to display.
+ */
 function ColumnCard({ task }: { task: BoardTask }) {
   return (
     <article className="board-card bordered bg-[rgba(255,255,255,0.04)] p-3">
@@ -260,6 +268,10 @@ function ColumnCard({ task }: { task: BoardTask }) {
   );
 }
 
+/**
+ * Renders a static reference card for supporting dashboard content.
+ * @param task The reference item to display.
+ */
 function StaticCard({ task }: { task: BoardTask }) {
   return (
     <article className="board-card bordered bg-[rgba(255,255,255,0.04)] p-3">
@@ -276,6 +288,9 @@ function StaticCard({ task }: { task: BoardTask }) {
   );
 }
 
+/**
+ * Renders the dashboard homepage using server-fetched task data and static project context.
+ */
 export default async function Home() {
   const { tasks, feedback } = await loadTasks();
   const groupedTasks = splitTasks(tasks);

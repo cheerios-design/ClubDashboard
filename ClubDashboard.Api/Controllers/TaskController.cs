@@ -8,6 +8,9 @@ namespace ClubDashboard.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+/// <summary>
+/// Handles task CRUD operations for the club dashboard API.
+/// </summary>
 public class TasksController : ControllerBase
 {
     private readonly AppDbContext _context;
@@ -19,6 +22,10 @@ public class TasksController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets all tasks including their assigned users.
+    /// </summary>
+    /// <returns>A collection of tasks or a server error response.</returns>
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TaskItem>>> GetTasks()
     {
@@ -37,6 +44,11 @@ public class TasksController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Gets a single task by its identifier.
+    /// </summary>
+    /// <param name="id">The task identifier.</param>
+    /// <returns>The requested task, a not found response, or a server error response.</returns>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TaskItem>> GetTask(int id)
     {
@@ -60,6 +72,11 @@ public class TasksController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Creates a new task.
+    /// </summary>
+    /// <param name="taskItem">The task payload to create.</param>
+    /// <returns>The created task or an error response.</returns>
     [HttpPost]
     public async Task<ActionResult<TaskItem>> CreateTask(TaskItem taskItem)
     {
@@ -95,6 +112,12 @@ public class TasksController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Updates an existing task.
+    /// </summary>
+    /// <param name="id">The task identifier from the route.</param>
+    /// <param name="taskItem">The updated task payload.</param>
+    /// <returns>No content on success or an error response.</returns>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateTask(int id, TaskItem taskItem)
     {
@@ -142,6 +165,11 @@ public class TasksController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Deletes a task by its identifier.
+    /// </summary>
+    /// <param name="id">The task identifier.</param>
+    /// <returns>No content on success or an error response.</returns>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteTask(int id)
     {
